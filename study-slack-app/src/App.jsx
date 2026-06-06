@@ -247,11 +247,6 @@ function buildSlackPayload({ results, studyDate, participants, topic }) {
         text: results.speaking || "",
         mrkdwn_in: ["text"],
       },
-      {
-        color: "#E01E5A",
-        text: results.english || "",
-        mrkdwn_in: ["text"],
-      },
     ],
   };
 }
@@ -354,7 +349,7 @@ export default function App() {
       const insightsText = insRes.status === "fulfilled" ? insRes.value : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
 
       setBlockLoading((prev) => ({ ...prev, insights: false }));
-      setResults({ insights: insightsText, speaking: speakingText, english: "" });
+      setResults({ insights: insightsText, speaking: speakingText, english: "", englishParts: [] });
 
       const nameList = extractNamesFromSpeaking(speakingText);
       if (nameList.length > 0) setParticipants(nameList.join(", "));
@@ -374,6 +369,7 @@ export default function App() {
         setResults((prev) => ({
           ...prev,
           english: `🗣️ *영어 표현 교정 꿀팁*\n\n${englishParts.join("\n\n")}`,
+          englishParts: [...englishParts],
         }));
       }
 
@@ -433,21 +429,31 @@ export default function App() {
   const sendToSlack = async () => {
     if (!results) return;
 
-    const payload = buildSlackPayload({
-      results,
-      studyDate,
-      participants,
-      topic: getTopic(topicSelect, topicCustom),
-    });
-
-    try {
-      setSlackMsg("전송 중...");
-      const response = await fetch("/api/send-slack", {
+    const postSlack = async (payload) => {
+      const res = await fetch("/api/send-slack", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payload }),
       });
-      if (!response.ok) throw new Error("Slack 전송 실패");
+      if (!res.ok) throw new Error("Slack 전송 실패");
+    };
+
+    try {
+      setSlackMsg("전송 중...");
+
+      await postSlack(buildSlackPayload({
+        results,
+        studyDate,
+        participants,
+        topic: getTopic(topicSelect, topicCustom),
+      }));
+
+      const parts = results.englishParts || [];
+      for (let i = 0; i < parts.length; i++) {
+        const text = i === 0 ? `🗣️ *영어 표현 교정 꿀팁*\n\n${parts[i]}` : parts[i];
+        await postSlack({ attachments: [{ color: "#E01E5A", text, mrkdwn_in: ["text"] }] });
+      }
+
       setSlackMsg("✓ 전송 완료! 슬랙 채널을 확인해주세요");
     } catch {
       setSlackMsg("❌ 전송 실패 — Slack 설정을 확인해주세요");
