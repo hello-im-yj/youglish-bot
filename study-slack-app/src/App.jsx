@@ -449,9 +449,12 @@ export default function App() {
       }));
 
       const parts = results.englishParts || [];
+      const names = extractNamesFromSpeaking(results.speaking || "");
       for (let i = 0; i < parts.length; i++) {
-        const text = i === 0 ? `🗣️ *영어 표현 교정 꿀팁*\n\n${parts[i]}` : parts[i];
-        await postSlack({ attachments: [{ color: "#E01E5A", text, mrkdwn_in: ["text"] }] });
+        const name = names[i] || `참가자 ${i + 1}`;
+        const content = parts[i].replace(/^\*\[.+?\]\*\s*\n*/s, "").trim();
+        const header = i === 0 ? `🗣️ *영어 표현 교정 꿀팁*\n\n*[${name}]*\n\n` : `*[${name}]*\n\n`;
+        await postSlack({ attachments: [{ color: "#E01E5A", text: header + content, mrkdwn_in: ["text"] }] });
       }
 
       setSlackMsg("✓ 전송 완료! 슬랙 채널을 확인해주세요");
