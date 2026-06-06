@@ -382,7 +382,7 @@ export default function App() {
       setBlockLoading((prev) => ({ ...prev, speaking: false }));
 
       const [insRes] = await Promise.allSettled([
-        callAPI(buildInsightsPrompt(verifiedTranscript, studyTopic), 1000),
+        callAPI(buildInsightsPrompt(verifiedTranscript, studyTopic), 1500),
       ]);
 
       const insightsText = insRes.status === "fulfilled" ? insRes.value.text : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
