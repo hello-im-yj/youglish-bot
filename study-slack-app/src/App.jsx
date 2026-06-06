@@ -13,7 +13,7 @@ function extractNamesFromSpeaking(text) {
     const m = stripped.match(/^([가-힣a-zA-Z][가-힣a-zA-Z\s]{0,15}?)\s*[:：]/);
     if (m) {
       const name = m[1].trim();
-      if (name.length >= 2 && !/^(http|www|참석|발화|분석|note|🎙)/i.test(name)) {
+      if (name.length >= 2 && !/^(http|www|참석|발화|분석|note|오류|error|api|🎙)/i.test(name)) {
         names.push(name);
       }
     }
@@ -39,7 +39,8 @@ async function callAPI(content, maxTokens) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`API ${res.status}: ${err?.error || res.statusText}`);
+    const message = err?.error || res.statusText || "서버 응답을 처리하지 못했습니다.";
+    throw new Error(`API ${res.status}: ${message}`);
   }
 
   const data = await res.json();
@@ -284,13 +285,13 @@ export default function App() {
         callAPI(buildSpeakingPrompt(transcript), 400),
       ]);
 
-      const insightsText = insRes.status === "fulfilled" ? insRes.value : `오류: ${insRes.reason?.message}`;
-      const speakingText = spkRes.status === "fulfilled" ? spkRes.value : `오류: ${spkRes.reason?.message}`;
+      const insightsText = insRes.status === "fulfilled" ? insRes.value : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
+      const speakingText = spkRes.status === "fulfilled" ? spkRes.value : `오류: ${spkRes.reason?.message || "발화량 분석 실패"}`;
 
       setBlockLoading((prev) => ({ ...prev, insights: false, speaking: false }));
       setResults({ insights: insightsText, speaking: speakingText, english: "" });
 
-      const nameList = extractNamesFromSpeaking(speakingText);
+      const nameList = spkRes.status === "fulfilled" ? extractNamesFromSpeaking(speakingText) : [];
       if (nameList.length > 0) setParticipants(nameList.join(", "));
 
       const englishParts = [];
@@ -314,7 +315,9 @@ export default function App() {
       if (nameList.length === 0) {
         setResults((prev) => ({
           ...prev,
-          english: "🗣️ *영어 표현 교정 꿀팁*\n\n(참석자 이름을 추출하지 못했습니다)",
+          english: spkRes.status === "fulfilled"
+            ? "🗣️ *영어 표현 교정 꿀팁*\n\n(참석자 이름을 추출하지 못했습니다)"
+            : "🗣️ *영어 표현 교정 꿀팁*\n\n(발화량 분석 실패로 영어 교정을 건너뛰었습니다)",
         }));
       }
     } catch (e) {

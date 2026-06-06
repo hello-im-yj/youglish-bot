@@ -40,6 +40,14 @@ function getModelList(env) {
   return [...new Set([primaryModel, ...configuredFallbacks, ...DEFAULT_FALLBACK_MODELS])];
 }
 
+function getApiErrorMessage({ data, response }) {
+  if (data?.error?.message) return data.error.message;
+  if (typeof data?.error === "string") return data.error;
+  if (data?.message) return data.message;
+  if (response.statusText) return response.statusText;
+  return `Gemini API request failed with status ${response.status}`;
+}
+
 async function generateWithModel({ geminiKey, geminiModel, content, maxOutputTokens }) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`, {
     method: "POST",
@@ -52,7 +60,7 @@ async function generateWithModel({ geminiKey, geminiModel, content, maxOutputTok
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const apiMessage = data?.error?.message || response.statusText;
+    const apiMessage = getApiErrorMessage({ data, response });
     const isQuotaError = apiMessage.includes("Quota exceeded");
     const isHighDemandError =
       response.status === 503 ||
