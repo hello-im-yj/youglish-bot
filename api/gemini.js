@@ -47,7 +47,10 @@ async function generateWithModel({ geminiKey, geminiModel, content, maxOutputTok
     throw error;
   }
 
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.find((p) => p.text)?.text?.trim() || "";
+  const finishReason = candidate?.finishReason || null;
+  return { text, finishReason };
 }
 
 function isAllowedOrigin(req) {
@@ -78,8 +81,8 @@ export default async function handler(req, res) {
     for (const geminiModel of geminiModels) {
       for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
         try {
-          const text = await generateWithModel({ geminiKey, geminiModel, content, maxOutputTokens });
-          return res.status(200).json({ ok: true, model: geminiModel, text });
+          const { text, finishReason } = await generateWithModel({ geminiKey, geminiModel, content, maxOutputTokens });
+          return res.status(200).json({ ok: true, model: geminiModel, text, finishReason });
         } catch (e) {
           if (!e.isRetryable) throw e;
           if (attempt < RETRY_DELAYS_MS.length && e.statusCode !== 429) {

@@ -94,7 +94,7 @@ async function callAPI(content, maxTokens) {
     throw new Error(`API ${res.status}: ${message}`);
   }
 
-  return { text: data.text || "", model: data.model || "" };
+  return { text: data.text || "", model: data.model || "", finishReason: data.finishReason || null };
 }
 
 const buildInsightsPrompt = (transcript, topic) => `주식 스터디 전사본을 읽고, 투자 판단에 활용할 수 있는 인사이트를 최대 5개 뽑아주세요.
@@ -305,6 +305,7 @@ export default function App() {
   const [copyMsg, setCopyMsg] = useState("");
   const [slackMsg, setSlackMsg] = useState("");
   const [usedModel, setUsedModel] = useState("");
+  const [finishReasons, setFinishReasons] = useState({});
   const fileRef = useRef();
 
   const handleFile = async (e) => {
@@ -372,6 +373,7 @@ export default function App() {
     setResults(null);
     setCopyMsg("");
     setEnglishProgress("");
+    setFinishReasons({});
     setBlockLoading({ insights: true, speaking: true, english: true, common: true });
 
     try {
@@ -382,11 +384,14 @@ export default function App() {
       setBlockLoading((prev) => ({ ...prev, speaking: false }));
 
       const [insRes] = await Promise.allSettled([
-        callAPI(buildInsightsPrompt(verifiedTranscript, studyTopic), 1500),
+        callAPI(buildInsightsPrompt(transcript, studyTopic), 1500),
       ]);
 
       const insightsText = insRes.status === "fulfilled" ? insRes.value.text : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
-      if (insRes.status === "fulfilled" && insRes.value.model) setUsedModel(insRes.value.model);
+      if (insRes.status === "fulfilled") {
+        if (insRes.value.model) setUsedModel(insRes.value.model);
+        if (insRes.value.finishReason) setFinishReasons((prev) => ({ ...prev, insights: insRes.value.finishReason }));
+      }
 
       setBlockLoading((prev) => ({ ...prev, insights: false }));
       setResults({ insights: insightsText, speaking: speakingText, english: "", englishParts: [], common: "" });
@@ -401,7 +406,9 @@ export default function App() {
         const speakerLines = extractSpeakerLines(transcript, name);
         let result = "";
         try {
-          result = (await callAPI(buildEnglishPromptForOne(name, speakerLines), 4096)).text;
+          const engRes = await callAPI(buildEnglishPromptForOne(name, speakerLines), 4096);
+          result = engRes.text;
+          if (engRes.finishReason) setFinishReasons((prev) => ({ ...prev, [`english_${name}`]: engRes.finishReason }));
         } catch (e) {
           result = `*[${name}]*\n오류: ${e.message}`;
         }
@@ -425,7 +432,9 @@ export default function App() {
 
       let commonText = "";
       try {
-        commonText = (await callAPI(buildCommonFeedbackPrompt(verifiedTranscript), 1500)).text;
+        const commonRes = await callAPI(buildCommonFeedbackPrompt(transcript), 1500);
+        commonText = commonRes.text;
+        if (commonRes.finishReason) setFinishReasons((prev) => ({ ...prev, common: commonRes.finishReason }));
       } catch (e) {
         commonText = `오류: ${e.message}`;
       }
@@ -696,11 +705,27 @@ export default function App() {
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: "#333", margin: 0 }}>생성된 슬랙 메시지</p>
-            {usedModel && (
-              <span style={{ fontSize: 11, color: "#999", background: "#f3f3f3", borderRadius: 4, padding: "2px 7px" }}>
-                {usedModel}
-              </span>
-            )}
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {usedModel && (
+                <span style={{ fontSize: 11, color: "#999", background: "#f3f3f3", borderRadius: 4, padding: "2px 7px" }}>
+                  {usedModel}
+                </span>
+              )}
+              {Object.entries(finishReasons).map(([key, reason]) => (
+                <span
+                  key={key}
+                  style={{
+                    fontSize: 10,
+                    borderRadius: 4,
+                    padding: "2px 6px",
+                    background: reason === "MAX_TOKENS" ? "#fff0f0" : "#f0f7f0",
+                    color: reason === "MAX_TOKENS" ? "#c0392b" : "#2d7a3a",
+                  }}
+                >
+                  {key}: {reason}
+                </span>
+              ))}
+            </div>
           </div>
 
           {blockMeta.map((m) => (
