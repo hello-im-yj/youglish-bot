@@ -229,7 +229,7 @@ function SlackBlock({ meta, content, loading, finishInfo }) {
                   color: b.includes("MAX_TOKENS") ? "#c0392b" : "#2d7a3a",
                 }}
               >
-                {b}
+                {b.replace(/\bSTOP\b/g, "✅").replace(/\bMAX_TOKENS\b/g, "MAX_TOKENS")}
               </span>
             ))}
           </div>
