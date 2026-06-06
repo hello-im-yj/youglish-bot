@@ -37,13 +37,20 @@ async function callAPI(content, maxTokens) {
     body: JSON.stringify({ content, maxTokens }),
   });
 
+  const raw = await res.text();
+  let data = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {};
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const message = err?.error || res.statusText || "서버 응답을 처리하지 못했습니다.";
+    const fallback = raw?.slice(0, 300) || res.statusText || "서버 응답을 처리하지 못했습니다.";
+    const message = data?.error || fallback;
     throw new Error(`API ${res.status}: ${message}`);
   }
 
-  const data = await res.json();
   return data.text || "";
 }
 
