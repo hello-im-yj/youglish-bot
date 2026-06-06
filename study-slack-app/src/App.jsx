@@ -30,6 +30,28 @@ function extractSpeakerLines(transcript, name) {
   return lines.join("\n");
 }
 
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function buildTranscriptInput(transcript, stats) {
+  const verification = stats?.verified
+    ? "전사본 파일 전체 로드 검증 완료"
+    : "전사본 파일 전체 로드 검증 미완료";
+
+  return `[전사본 입력 검증]
+상태: ${verification}
+파일명: ${stats?.fileName || "(알 수 없음)"}
+원본 파일 크기: ${formatNumber(stats?.fileBytes)} bytes
+앱 로드 크기: ${formatNumber(stats?.loadedBytes)} bytes
+문자 수: ${formatNumber(stats?.charsRaw)}
+단어 수: ${formatNumber(stats?.wordsRaw)}
+
+[전사본 전체 시작]
+${transcript}
+[전사본 전체 끝]`;
+}
+
 async function callAPI(content, maxTokens) {
   const res = await fetch("/api/gemini", {
     method: "POST",
@@ -242,7 +264,7 @@ export default function App() {
   const [slackMsg, setSlackMsg] = useState("");
   const fileRef = useRef();
 
-  const handleFile = (e) => {
+  const handleFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.name.endsWith(".txt")) {
@@ -251,14 +273,29 @@ export default function App() {
     }
 
     setError("");
+    setResults(null);
+    setCopyMsg("");
+    setSlackMsg("");
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target.result;
+    try {
+      const buffer = await file.arrayBuffer();
+      const text = new TextDecoder("utf-8").decode(buffer);
+      const loadedBytes = buffer.byteLength;
+      const verified = loadedBytes === file.size;
+      const wordsRaw = text.split(/\s+/).filter(Boolean).length;
+
       setTranscript(text);
       setTranscriptStats({
+        fileName: file.name,
+        fileBytes: file.size,
+        loadedBytes,
+        verified,
+        charsRaw: text.length,
+        wordsRaw,
         chars: text.length.toLocaleString(),
-        words: text.split(/\s+/).filter(Boolean).length.toLocaleString(),
+        words: wordsRaw.toLocaleString(),
+        fileBytesLabel: file.size.toLocaleString(),
+        loadedBytesLabel: loadedBytes.toLocaleString(),
       });
 
       const dateRegex = /(\d{4})[-./](\d{1,2})[-./](\d{1,2})/;
@@ -268,13 +305,23 @@ export default function App() {
         setStudyDate(`${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`);
       }
       setParticipants("");
-    };
-    reader.readAsText(file, "utf-8");
+      if (!verified) {
+        setError("전사본 로드 검증 실패: 원본 파일 크기와 앱 로드 크기가 일치하지 않습니다.");
+      }
+    } catch (err) {
+      setTranscript("");
+      setTranscriptStats(null);
+      setError(`전사본 파일을 읽지 못했습니다: ${err.message}`);
+    }
   };
 
   const generate = async () => {
     if (!transcript.trim()) {
       setError("먼저 전사본 파일을 업로드해주세요.");
+      return;
+    }
+    if (!transcriptStats?.verified) {
+      setError("전사본 전체 로드 검증이 완료되지 않았습니다. 파일을 다시 업로드해주세요.");
       return;
     }
     setLoading(true);
@@ -286,10 +333,11 @@ export default function App() {
 
     try {
       const studyTopic = getTopic(topicSelect, topicCustom);
+      const verifiedTranscript = buildTranscriptInput(transcript, transcriptStats);
 
       const [insRes, spkRes] = await Promise.allSettled([
-        callAPI(buildInsightsPrompt(transcript, studyTopic), 500),
-        callAPI(buildSpeakingPrompt(transcript), 400),
+        callAPI(buildInsightsPrompt(verifiedTranscript, studyTopic), 500),
+        callAPI(buildSpeakingPrompt(verifiedTranscript), 400),
       ]);
 
       const insightsText = insRes.status === "fulfilled" ? insRes.value : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
@@ -424,8 +472,23 @@ export default function App() {
           )}
         </div>
         {transcriptStats && (
-          <div style={{ marginTop: 6, fontSize: 11, color: "#888", textAlign: "right" }}>
-            📊 {transcriptStats.chars}자 · {transcriptStats.words}단어 로드됨
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 11,
+              color: transcriptStats.verified ? "#2d7a3a" : "#c0392b",
+              textAlign: "right",
+              lineHeight: 1.6,
+            }}
+          >
+            <div>
+              {transcriptStats.verified ? "✓ 전체 로드 검증 완료" : "⚠ 전체 로드 검증 실패"}
+              {" · 원본 "}
+              {transcriptStats.fileBytesLabel} bytes / 로드 {transcriptStats.loadedBytesLabel} bytes
+            </div>
+            <div style={{ color: "#888" }}>
+              📊 {transcriptStats.chars}자 · {transcriptStats.words}단어
+            </div>
           </div>
         )}
         <input ref={fileRef} type="file" accept=".txt" onChange={handleFile} style={{ display: "none" }} />
