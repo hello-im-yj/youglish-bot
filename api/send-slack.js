@@ -1,5 +1,13 @@
+function isAllowedOrigin(req) {
+  const allowedOrigin = process.env.APP_ORIGIN;
+  if (!allowedOrigin) return true;
+  const origin = req.headers.origin || req.headers.referer || "";
+  return origin.startsWith(allowedOrigin);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
+  if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: "Forbidden" });
 
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   const { text, payload } = req.body || {};

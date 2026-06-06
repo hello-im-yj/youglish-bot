@@ -50,8 +50,16 @@ async function generateWithModel({ geminiKey, geminiModel, content, maxOutputTok
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
 }
 
+function isAllowedOrigin(req) {
+  const allowedOrigin = process.env.APP_ORIGIN;
+  if (!allowedOrigin) return true;
+  const origin = req.headers.origin || req.headers.referer || "";
+  return origin.startsWith(allowedOrigin);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
+  if (!isAllowedOrigin(req)) return res.status(403).json({ ok: false, error: "Forbidden" });
 
   const geminiKey = process.env.GEMINI_API_KEY;
   const geminiModels = getModelList();
