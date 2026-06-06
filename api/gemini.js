@@ -1,4 +1,4 @@
-const DEFAULT_FALLBACK_MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash"];
+const DEFAULT_FALLBACK_MODELS = ["gemini-2.5-flash-lite"];
 const RETRY_DELAYS_MS = [700, 1600];
 
 function sleep(ms) {
