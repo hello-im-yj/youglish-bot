@@ -68,7 +68,7 @@ export default async function handler(req, res) {
   }
 
   const { content, maxTokens } = req.body || {};
-  const maxOutputTokens = Math.min(Number(maxTokens) || 1024, 4096);
+  const maxOutputTokens = Math.min(Number(maxTokens) || 1024, 8192);
   if (!content) {
     return res.status(400).json({ ok: false, error: "content is required" });
   }

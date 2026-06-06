@@ -94,7 +94,7 @@ async function callAPI(content, maxTokens) {
     throw new Error(`API ${res.status}: ${message}`);
   }
 
-  return data.text || "";
+  return { text: data.text || "", model: data.model || "" };
 }
 
 const buildInsightsPrompt = (transcript, topic) => `주식 스터디 전사본을 읽고, 투자 판단에 활용할 수 있는 인사이트를 최대 5개 뽑아주세요.
@@ -304,6 +304,7 @@ export default function App() {
   const [englishProgress, setEnglishProgress] = useState("");
   const [copyMsg, setCopyMsg] = useState("");
   const [slackMsg, setSlackMsg] = useState("");
+  const [usedModel, setUsedModel] = useState("");
   const fileRef = useRef();
 
   const handleFile = async (e) => {
@@ -384,7 +385,8 @@ export default function App() {
         callAPI(buildInsightsPrompt(verifiedTranscript, studyTopic), 1000),
       ]);
 
-      const insightsText = insRes.status === "fulfilled" ? insRes.value : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
+      const insightsText = insRes.status === "fulfilled" ? insRes.value.text : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
+      if (insRes.status === "fulfilled" && insRes.value.model) setUsedModel(insRes.value.model);
 
       setBlockLoading((prev) => ({ ...prev, insights: false }));
       setResults({ insights: insightsText, speaking: speakingText, english: "", englishParts: [], common: "" });
@@ -399,7 +401,7 @@ export default function App() {
         const speakerLines = extractSpeakerLines(transcript, name);
         let result = "";
         try {
-          result = await callAPI(buildEnglishPromptForOne(name, speakerLines), 2500);
+          result = (await callAPI(buildEnglishPromptForOne(name, speakerLines), 4096)).text;
         } catch (e) {
           result = `*[${name}]*\n오류: ${e.message}`;
         }
@@ -423,7 +425,7 @@ export default function App() {
 
       let commonText = "";
       try {
-        commonText = await callAPI(buildCommonFeedbackPrompt(verifiedTranscript), 1000);
+        commonText = (await callAPI(buildCommonFeedbackPrompt(verifiedTranscript), 1500)).text;
       } catch (e) {
         commonText = `오류: ${e.message}`;
       }
@@ -692,7 +694,14 @@ export default function App() {
             </div>
           </div>
 
-          <p style={{ fontSize: 13, fontWeight: 500, color: "#333", margin: "0 0 10px" }}>생성된 슬랙 메시지</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: "#333", margin: 0 }}>생성된 슬랙 메시지</p>
+            {usedModel && (
+              <span style={{ fontSize: 11, color: "#999", background: "#f3f3f3", borderRadius: 4, padding: "2px 7px" }}>
+                {usedModel}
+              </span>
+            )}
+          </div>
 
           {blockMeta.map((m) => (
             <div key={m.key}>
