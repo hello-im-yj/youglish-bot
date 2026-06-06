@@ -197,13 +197,16 @@ const buildCommonFeedbackPrompt = (transcript) => `아래는 영어 스터디 �
 전사본:
 ${transcript}`;
 
-function SlackBlock({ meta, content, loading }) {
+function SlackBlock({ meta, content, loading, finishInfo }) {
+  const hasMaxTokens = finishInfo && (Array.isArray(finishInfo) ? finishInfo : [finishInfo]).some((f) => f.includes("MAX_TOKENS"));
+  const badges = finishInfo ? (Array.isArray(finishInfo) ? finishInfo : [finishInfo]) : [];
   return (
     <div style={{ border: "0.5px solid #e0e0e0", borderRadius: 12, marginBottom: 12 }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
+          justifyContent: "space-between",
           padding: "9px 14px",
           background: "#f8f8f8",
           borderBottom: "0.5px solid #e8e8e8",
@@ -213,6 +216,24 @@ function SlackBlock({ meta, content, loading }) {
         <span style={{ fontSize: 12, fontWeight: 500, color: "#555" }}>
           {meta.icon} {meta.label}
         </span>
+        {badges.length > 0 && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {badges.map((b, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 10,
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                  background: b.includes("MAX_TOKENS") ? "#fff0f0" : "#f0f7f0",
+                  color: b.includes("MAX_TOKENS") ? "#c0392b" : "#2d7a3a",
+                }}
+              >
+                {b}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div
         style={{
@@ -384,7 +405,7 @@ export default function App() {
       setBlockLoading((prev) => ({ ...prev, speaking: false }));
 
       const [insRes] = await Promise.allSettled([
-        callAPI(buildInsightsPrompt(transcript, studyTopic), 1500),
+        callAPI(buildInsightsPrompt(transcript, studyTopic), 4000),
       ]);
 
       const insightsText = insRes.status === "fulfilled" ? insRes.value.text : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
@@ -406,10 +427,10 @@ export default function App() {
         const speakerLines = extractSpeakerLines(transcript, name);
         let result = "";
         try {
-          const engRes = await callAPI(buildEnglishPromptForOne(name, speakerLines), 4096);
+          const engRes = await callAPI(buildEnglishPromptForOne(name, speakerLines), 8192);
           result = engRes.text;
           if (engRes.finishReason) setFinishReasons((prev) => ({ ...prev, [`english_${name}`]: engRes.finishReason }));
-        } catch (e) {
+        } catch(e) {
           result = `*[${name}]*\n오류: ${e.message}`;
         }
         englishParts.push(result);
@@ -432,7 +453,7 @@ export default function App() {
 
       let commonText = "";
       try {
-        const commonRes = await callAPI(buildCommonFeedbackPrompt(transcript), 1500);
+        const commonRes = await callAPI(buildCommonFeedbackPrompt(transcript), 4000);
         commonText = commonRes.text;
         if (commonRes.finishReason) setFinishReasons((prev) => ({ ...prev, common: commonRes.finishReason }));
       } catch (e) {
@@ -705,39 +726,36 @@ export default function App() {
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: "#333", margin: 0 }}>생성된 슬랙 메시지</p>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-              {usedModel && (
-                <span style={{ fontSize: 11, color: "#999", background: "#f3f3f3", borderRadius: 4, padding: "2px 7px" }}>
-                  {usedModel}
-                </span>
-              )}
-              {Object.entries(finishReasons).map(([key, reason]) => (
-                <span
-                  key={key}
-                  style={{
-                    fontSize: 10,
-                    borderRadius: 4,
-                    padding: "2px 6px",
-                    background: reason === "MAX_TOKENS" ? "#fff0f0" : "#f0f7f0",
-                    color: reason === "MAX_TOKENS" ? "#c0392b" : "#2d7a3a",
-                  }}
-                >
-                  {key}: {reason}
-                </span>
-              ))}
-            </div>
+            {usedModel && (
+              <span style={{ fontSize: 11, color: "#999", background: "#f3f3f3", borderRadius: 4, padding: "2px 7px" }}>
+                {usedModel}
+              </span>
+            )}
           </div>
 
-          {blockMeta.map((m) => (
-            <div key={m.key}>
-              <SlackBlock meta={m} content={results?.[m.key] || ""} loading={blockLoading[m.key]} />
-              {m.key === "english" && englishProgress && (
-                <div style={{ fontSize: 11, color: "#888", textAlign: "right", marginTop: -8, marginBottom: 12 }}>
-                  ⏳ {englishProgress}
-                </div>
-              )}
-            </div>
-          ))}
+          {blockMeta.map((m) => {
+            let finishInfo = null;
+            if (m.key === "insights" && finishReasons.insights) {
+              finishInfo = finishReasons.insights;
+            } else if (m.key === "english") {
+              const parts = Object.entries(finishReasons)
+                .filter(([k]) => k.startsWith("english_"))
+                .map(([k, v]) => `${k.replace("english_", "")}: ${v}`);
+              if (parts.length > 0) finishInfo = parts;
+            } else if (m.key === "common" && finishReasons.common) {
+              finishInfo = finishReasons.common;
+            }
+            return (
+              <div key={m.key}>
+                <SlackBlock meta={m} content={results?.[m.key] || ""} loading={blockLoading[m.key]} finishInfo={finishInfo} />
+                {m.key === "english" && englishProgress && (
+                  <div style={{ fontSize: 11, color: "#888", textAlign: "right", marginTop: -8, marginBottom: 12 }}>
+                    ⏳ {englishProgress}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {allReady && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
