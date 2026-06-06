@@ -2,6 +2,11 @@
   "installCommand": "npm --prefix study-slack-app install",
   "buildCommand": "npm --prefix study-slack-app run build",
   "outputDirectory": "study-slack-app/dist",
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/((?!api/.*).*)",

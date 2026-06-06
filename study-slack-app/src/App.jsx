@@ -74,7 +74,7 @@ ${transcript}
 }
 
 async function callAPI(content, maxTokens) {
-  const res = await fetch("/api/gemini", {
+  const res = await fetch("/api/openai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content, maxTokens }),
@@ -209,7 +209,7 @@ const buildCommonFeedbackPrompt = (transcript) => `아래는 영어 스터디 �
 ${transcript}`;
 
 function SlackBlock({ meta, content, loading, finishInfo }) {
-  const hasMaxTokens = finishInfo && (Array.isArray(finishInfo) ? finishInfo : [finishInfo]).some((f) => f.includes("MAX_TOKENS"));
+  const hasMaxTokens = finishInfo && (Array.isArray(finishInfo) ? finishInfo : [finishInfo]).some((f) => f.includes("MAX_TOKENS") || f.includes("length"));
   const badges = finishInfo ? (Array.isArray(finishInfo) ? finishInfo : [finishInfo]) : [];
   return (
     <div style={{ border: "0.5px solid #e0e0e0", borderRadius: 12, marginBottom: 12 }}>
@@ -236,11 +236,11 @@ function SlackBlock({ meta, content, loading, finishInfo }) {
                   fontSize: 10,
                   borderRadius: 4,
                   padding: "1px 6px",
-                  background: b.includes("MAX_TOKENS") ? "#fff0f0" : "#f0f7f0",
-                  color: b.includes("MAX_TOKENS") ? "#c0392b" : "#2d7a3a",
+                  background: b.includes("MAX_TOKENS") || b.includes("length") ? "#fff0f0" : "#f0f7f0",
+                  color: b.includes("MAX_TOKENS") || b.includes("length") ? "#c0392b" : "#2d7a3a",
                 }}
               >
-                {b.replace(/\bSTOP\b/g, "✅").replace(/\bMAX_TOKENS\b/g, "MAX_TOKENS")}
+                {b.replace(/\b(STOP|stop)\b/g, "✅").replace(/\blength\b/g, "MAX_TOKENS")}
               </span>
             ))}
           </div>
