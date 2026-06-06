@@ -463,7 +463,7 @@ export default function App() {
 
       let commonText = "";
       try {
-        const commonRes = await callAPI(buildCommonFeedbackPrompt(transcript), 4000);
+        const commonRes = await callAPI(buildCommonFeedbackPrompt(transcript), 8192);
         commonText = commonRes.text;
         if (commonRes.finishReason) setFinishReasons((prev) => ({ ...prev, common: commonRes.finishReason }));
       } catch (e) {
