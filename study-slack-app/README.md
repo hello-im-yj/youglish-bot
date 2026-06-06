@@ -2,6 +2,8 @@
 
 Fireflies.ai 스터디 전사본을 분석해 Slack 메시지로 정리하는 Vite + React 앱입니다.
 
+![youglish-bot preview](../images.jpeg)
+
 ## Local
 
 ```bash
