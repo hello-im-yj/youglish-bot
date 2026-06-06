@@ -508,7 +508,7 @@ export default function App() {
   };
 
   const sendToSlack = async () => {
-    if (!results) return;
+    if (!results || slackMsg === "전송 중...") return;
 
     const postSlack = async (payload) => {
       const res = await fetch("/api/send-slack", {
@@ -778,15 +778,16 @@ export default function App() {
               </button>
               <button
                 onClick={sendToSlack}
+                disabled={slackMsg === "전송 중..."}
                 style={{
                   width: "100%",
                   padding: "11px 0",
                   fontSize: 14,
                   fontWeight: 500,
-                  cursor: "pointer",
+                  cursor: slackMsg === "전송 중..." ? "not-allowed" : "pointer",
                   borderRadius: 8,
                   border: slackMsg.startsWith("✓") ? "1.5px solid #2d7a3a" : "1.5px solid #4A154B",
-                  background: slackMsg.startsWith("✓") ? "#e6f4ea" : "#4A154B",
+                  background: slackMsg === "전송 중..." ? "#7a4a7a" : slackMsg.startsWith("✓") ? "#e6f4ea" : "#4A154B",
                   color: slackMsg.startsWith("✓") ? "#2d7a3a" : "#fff",
                   transition: "all 0.2s",
                 }}
