@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-const DEFAULT_FALLBACK_MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash"];
+const DEFAULT_FALLBACK_MODELS = ["claude-haiku-4-5"];
 const RETRY_DELAYS_MS = [700, 1600];
 
 function sleep(ms) {
@@ -31,8 +31,8 @@ function sendJson(res, statusCode, payload) {
 }
 
 function getModelList(env) {
-  const primaryModel = env.GEMINI_MODEL || "gemini-2.0-flash";
-  const configuredFallbacks = (env.GEMINI_FALLBACK_MODELS || "")
+  const primaryModel = env.ANTHROPIC_MODEL || "claude-sonnet-5";
+  const configuredFallbacks = (env.ANTHROPIC_FALLBACK_MODELS || "")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
@@ -45,64 +45,76 @@ function getApiErrorMessage({ data, response }) {
   if (typeof data?.error === "string") return data.error;
   if (data?.message) return data.message;
   if (response.statusText) return response.statusText;
-  return `Gemini API request failed with status ${response.status}`;
+  return `Claude API request failed with status ${response.status}`;
 }
 
-async function generateWithModel({ geminiKey, geminiModel, content, maxOutputTokens }) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`, {
+async function generateWithModel({ apiKey, model, content, maxOutputTokens }) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: content }] }],
-      generationConfig: { maxOutputTokens },
+      model,
+      max_tokens: maxOutputTokens,
+      messages: [{ role: "user", content }],
     }),
   });
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const apiMessage = getApiErrorMessage({ data, response });
-    const isQuotaError = apiMessage.includes("Quota exceeded");
-    const isHighDemandError =
-      response.status === 503 ||
-      apiMessage.includes("high demand") ||
-      apiMessage.includes("try again later");
+    const isRateLimited = response.status === 429;
+    const isOverloaded = response.status === 529 || response.status >= 500;
     const error = new Error(apiMessage);
-    error.statusCode = isQuotaError ? 429 : response.status;
-    error.isRetryable = isQuotaError || isHighDemandError;
+    error.statusCode = response.status;
+    error.isRetryable = isRateLimited || isOverloaded;
     throw error;
   }
 
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+  const text = (data.content || [])
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+  const finishReason = data.stop_reason || null;
+  return { text, finishReason };
 }
 
 function localApi(env) {
   return {
     name: "local-api",
     configureServer(server) {
-      server.middlewares.use("/api/gemini", async (req, res) => {
+      server.middlewares.use("/api/claude", async (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
           res.end();
           return;
         }
 
-        const geminiKey = env.GEMINI_API_KEY;
-        const geminiModels = getModelList(env);
-        if (!geminiKey) {
-          sendJson(res, 500, { ok: false, error: "GEMINI_API_KEY environment variable is missing" });
+        const apiKey = env.ANTHROPIC_API_KEY;
+        const models = getModelList(env);
+        if (!apiKey) {
+          sendJson(res, 500, { ok: false, error: "ANTHROPIC_API_KEY environment variable is missing" });
           return;
         }
 
         try {
           const { content, maxTokens } = await readJsonBody(req);
-          const maxOutputTokens = Math.min(Number(maxTokens) || 1024, 4096);
+          const maxOutputTokens = Math.min(Number(maxTokens) || 1024, 16000);
+          if (!content) {
+            sendJson(res, 400, { ok: false, error: "content is required" });
+            return;
+          }
           const failedModels = [];
 
-          for (const geminiModel of geminiModels) {
+          for (const model of models) {
             for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
               try {
-                const text = await generateWithModel({ geminiKey, geminiModel, content, maxOutputTokens });
-                sendJson(res, 200, { ok: true, model: geminiModel, text });
+                const { text, finishReason } = await generateWithModel({ apiKey, model, content, maxOutputTokens });
+                sendJson(res, 200, { ok: true, model, text, finishReason });
                 return;
               } catch (e) {
                 if (!e.isRetryable) throw e;
@@ -110,7 +122,7 @@ function localApi(env) {
                   await sleep(RETRY_DELAYS_MS[attempt]);
                   continue;
                 }
-                failedModels.push(`${geminiModel} (${e.statusCode || "error"})`);
+                failedModels.push(`${model} (${e.statusCode || "error"})`);
                 break;
               }
             }
@@ -118,7 +130,7 @@ function localApi(env) {
 
           sendJson(res, 503, {
             ok: false,
-            error: `Gemini is unavailable or quota-limited for all tried models: ${failedModels.join(", ")}. Try again later, reduce transcript size, or use a different Google project API key.`,
+            error: `Claude API is unavailable or rate-limited for all tried models: ${failedModels.join(", ")}. Try again later.`,
           });
         } catch (e) {
           sendJson(res, e.statusCode || 500, { ok: false, error: e.message });

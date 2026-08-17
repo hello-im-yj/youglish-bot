@@ -15,7 +15,7 @@ npm run dev
 `.env`에는 아래 값을 설정합니다.
 
 ```env
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.5-flash-lite
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-sonnet-5
 SLACK_WEBHOOK_URL=<your-slack-webhook-url>
 ```
