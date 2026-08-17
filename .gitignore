@@ -26,3 +26,6 @@ youglish-proto/
 *.jpg
 *.jpeg
 !images.jpeg
+
+# Local model-comparison outputs
+comparison-*.md
