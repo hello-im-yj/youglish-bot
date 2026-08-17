@@ -42,7 +42,7 @@ async function callAPI(content, maxTokens) {
 }
 
 function SlackBlock({ meta, content, loading, finishInfo }) {
-  const hasMaxTokens = finishInfo && (Array.isArray(finishInfo) ? finishInfo : [finishInfo]).some((f) => f.includes("MAX_TOKENS") || f.includes("length"));
+  const isTruncated = (t) => /max_tokens|length/i.test(t);
   const badges = finishInfo ? (Array.isArray(finishInfo) ? finishInfo : [finishInfo]) : [];
   return (
     <div style={{ border: "0.5px solid #e0e0e0", borderRadius: 12, marginBottom: 12 }}>
@@ -69,11 +69,11 @@ function SlackBlock({ meta, content, loading, finishInfo }) {
                   fontSize: 10,
                   borderRadius: 4,
                   padding: "1px 6px",
-                  background: b.includes("MAX_TOKENS") || b.includes("length") ? "#fff0f0" : "#f0f7f0",
-                  color: b.includes("MAX_TOKENS") || b.includes("length") ? "#c0392b" : "#2d7a3a",
+                  background: isTruncated(b) ? "#fff0f0" : "#f0f7f0",
+                  color: isTruncated(b) ? "#c0392b" : "#2d7a3a",
                 }}
               >
-                {b.replace(/\b(STOP|stop)\b/g, "✅").replace(/\blength\b/g, "MAX_TOKENS")}
+                {b.replace(/\b(end_turn|stop)\b/gi, "✅").replace(/\b(max_tokens|length)\b/gi, "⚠️ 잘림")}
               </span>
             ))}
           </div>
@@ -301,10 +301,11 @@ ${notes}`
         callAPI(buildInsightsPrompt(analysisInput, studyTopic), 4000),
       ]);
 
+      const resultTag = (r) => [r.finishReason, r.model].filter(Boolean).join(" · ");
       const insightsText = insRes.status === "fulfilled" ? insRes.value.text : `오류: ${insRes.reason?.message || "인사이트 생성 실패"}`;
       if (insRes.status === "fulfilled") {
         if (insRes.value.model) setUsedModel(insRes.value.model);
-        if (insRes.value.finishReason) setFinishReasons((prev) => ({ ...prev, insights: insRes.value.finishReason }));
+        if (insRes.value.finishReason) setFinishReasons((prev) => ({ ...prev, insights: resultTag(insRes.value) }));
       }
 
       setBlockLoading((prev) => ({ ...prev, insights: false }));
@@ -322,7 +323,7 @@ ${notes}`
         try {
           const engRes = await callAPI(buildEnglishPromptForOne(name, speakerLines, notes), 8192);
           result = engRes.text;
-          if (engRes.finishReason) setFinishReasons((prev) => ({ ...prev, [`english_${name}`]: engRes.finishReason }));
+          if (engRes.finishReason) setFinishReasons((prev) => ({ ...prev, [`english_${name}`]: resultTag(engRes) }));
         } catch(e) {
           result = `*[${name}]*\n오류: ${e.message}`;
         }
@@ -348,7 +349,7 @@ ${notes}`
       try {
         const commonRes = await callAPI(buildCommonFeedbackPrompt(analysisInput), 8192);
         commonText = commonRes.text;
-        if (commonRes.finishReason) setFinishReasons((prev) => ({ ...prev, common: commonRes.finishReason }));
+        if (commonRes.finishReason) setFinishReasons((prev) => ({ ...prev, common: resultTag(commonRes) }));
       } catch (e) {
         commonText = `오류: ${e.message}`;
       }
