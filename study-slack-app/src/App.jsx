@@ -161,6 +161,8 @@ export default function App() {
   const [auxFileName, setAuxFileName] = useState("");
   const [auxTranscript, setAuxTranscript] = useState("");
   const [correctionNotes, setCorrectionNotes] = useState("");
+  const [dragMain, setDragMain] = useState(false);
+  const [dragAux, setDragAux] = useState(false);
   const [studyDate, setStudyDate] = useState("");
   const [participants, setParticipants] = useState("");
   const [topicSelect, setTopicSelect] = useState("");
@@ -177,8 +179,7 @@ export default function App() {
   const fileRef = useRef();
   const auxFileRef = useRef();
 
-  const handleFile = async (e) => {
-    const file = e.target.files[0];
+  const processFile = async (file) => {
     if (!file) return;
     if (!file.name.endsWith(".txt")) {
       setError(".txt 파일만 업로드할 수 있어요.");
@@ -231,8 +232,7 @@ export default function App() {
     }
   };
 
-  const handleAuxFile = async (e) => {
-    const file = e.target.files[0];
+  const processAuxFile = async (file) => {
     if (!file) return;
     if (!file.name.endsWith(".txt")) {
       setError("보조 전사본도 .txt 파일만 업로드할 수 있어요.");
@@ -249,6 +249,9 @@ export default function App() {
       setError(`보조 전사본 파일을 읽지 못했습니다: ${err.message}`);
     }
   };
+
+  const handleFile = (e) => processFile(e.target.files[0]);
+  const handleAuxFile = (e) => processAuxFile(e.target.files[0]);
 
   const generate = async () => {
     if (!transcript.trim()) {
@@ -448,19 +451,22 @@ ${notes}`
         <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>📄 전사본 파일 업로드 (.txt)</label>
         <div
           onClick={() => fileRef.current.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragMain(true); }}
+          onDragLeave={() => setDragMain(false)}
+          onDrop={(e) => { e.preventDefault(); setDragMain(false); processFile(e.dataTransfer.files[0]); }}
           style={{
-            border: "1.5px dashed #d0d0d0",
+            border: dragMain ? "1.5px dashed #2d7a3a" : "1.5px dashed #d0d0d0",
             borderRadius: 10,
             padding: "18px 16px",
             textAlign: "center",
             cursor: "pointer",
-            background: fileName ? "#f0f7f0" : "#fafafa",
+            background: dragMain ? "#e6f4ea" : fileName ? "#f0f7f0" : "#fafafa",
           }}
         >
           {fileName ? (
             <span style={{ fontSize: 13, color: "#2d7a3a", fontWeight: 500 }}>✓ {fileName}</span>
           ) : (
-            <span style={{ fontSize: 13, color: "#aaa" }}>클릭해서 파일 선택</span>
+            <span style={{ fontSize: 13, color: "#aaa" }}>클릭 또는 파일을 여기로 드래그</span>
           )}
         </div>
         {transcriptStats && (
@@ -492,19 +498,22 @@ ${notes}`
         </label>
         <div
           onClick={() => auxFileRef.current.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragAux(true); }}
+          onDragLeave={() => setDragAux(false)}
+          onDrop={(e) => { e.preventDefault(); setDragAux(false); processAuxFile(e.dataTransfer.files[0]); }}
           style={{
-            border: "1.5px dashed #d0d0d0",
+            border: dragAux ? "1.5px dashed #2c5aa0" : "1.5px dashed #d0d0d0",
             borderRadius: 10,
             padding: "12px 16px",
             textAlign: "center",
             cursor: "pointer",
-            background: auxFileName ? "#f0f4fa" : "#fafafa",
+            background: dragAux ? "#e8f0fa" : auxFileName ? "#f0f4fa" : "#fafafa",
           }}
         >
           {auxFileName ? (
             <span style={{ fontSize: 13, color: "#2c5aa0", fontWeight: 500 }}>✓ {auxFileName}</span>
           ) : (
-            <span style={{ fontSize: 13, color: "#aaa" }}>클릭해서 파일 선택 (없어도 됩니다)</span>
+            <span style={{ fontSize: 13, color: "#aaa" }}>클릭 또는 드래그 (없어도 됩니다)</span>
           )}
         </div>
         <input ref={auxFileRef} type="file" accept=".txt" onChange={handleAuxFile} style={{ display: "none" }} />

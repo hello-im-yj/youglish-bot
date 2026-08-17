@@ -6,7 +6,7 @@ function sleep(ms) {
 }
 
 function getModelList() {
-  const primaryModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const primaryModel = (process.env.OPENAI_MODEL || "").trim() || "gpt-4.1-mini";
   const configuredFallbacks = (process.env.OPENAI_FALLBACK_MODELS || "")
     .split(",")
     .map((m) => m.trim())

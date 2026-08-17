@@ -31,7 +31,7 @@ function sendJson(res, statusCode, payload) {
 }
 
 function getModelList(env) {
-  const primaryModel = env.ANTHROPIC_MODEL || "claude-sonnet-5";
+  const primaryModel = (env.ANTHROPIC_MODEL || "").trim() || "claude-sonnet-5";
   const configuredFallbacks = (env.ANTHROPIC_FALLBACK_MODELS || "")
     .split(",")
     .map((model) => model.trim())

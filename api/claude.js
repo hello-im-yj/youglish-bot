@@ -6,7 +6,7 @@ function sleep(ms) {
 }
 
 function getModelList() {
-  const primaryModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+  const primaryModel = (process.env.ANTHROPIC_MODEL || "").trim() || "claude-sonnet-5";
   const configuredFallbacks = (process.env.ANTHROPIC_FALLBACK_MODELS || "")
     .split(",")
     .map((m) => m.trim())
